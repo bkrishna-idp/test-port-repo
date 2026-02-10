@@ -1,0 +1,24 @@
+name: Create GitHub Repo
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo_name:
+        required: true
+      private:
+        required: true
+
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create repository
+        run: |
+          curl -X POST https://api.github.com/user/repos \
+          -H "Authorization: Bearer ${{ secrets.PORT_SECRET_PAT }}" \
+          -H "Accept: application/vnd.github+json" \
+          -d '{
+            "name": "${{ inputs.repo_name }}",
+            "private": ${{inputs.private }}
+           }'
