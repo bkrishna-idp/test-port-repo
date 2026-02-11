@@ -31,13 +31,14 @@ jobs:
             "name": "${{ inputs.repo_name }}",
             "private": ${{inputs.private }}
            }'
+          )
           
           echo "HTTP status: $http_code"
           echo "Response:"
           cat response.json
           echo ""
-          if [[ "$http_code" =~ ]]; then
-            echo "SUCCESS: Repo '$ {{ inputs.repo_name }}' created.:
+          if [[ "$http_code" =~ ^2 ]]; then
+            echo "SUCCESS: Repo '$ {{ inputs.repo_name }}' created."
           else
             echo "FAILURE: Repo creation failed."
             exit 1
