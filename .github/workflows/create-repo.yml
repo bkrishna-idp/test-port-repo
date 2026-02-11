@@ -5,8 +5,10 @@ on:
     inputs:
       repo_name:
         required: true
+        type: string
       private:
         required: true
+        type: boolean
 
 
 jobs:
@@ -14,11 +16,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Create repository
+        shell: bash
         run: |
-          curl -X POST https://api.github.com/user/repos \
+          set -euo pipefail
+          
+          echo "Creating repo: '${{ inputs.repo_name }}' (private=${{ inputs.private }})"
+          
+          http_code=$(
+            curl -sS -o response.json -w "%{http_code}" \
+          -X POST https://api.github.com/user/repos \
           -H "Authorization: Bearer ${{ secrets.PORT_SECRET_PAT }}" \
           -H "Accept: application/vnd.github+json" \
           -d '{
             "name": "${{ inputs.repo_name }}",
             "private": ${{inputs.private }}
            }'
+          )
+          
+          echo "HTTP status: $http_code"
+          echo "Response:"
+          cat response.json
+          echo ""
+          if [[ "$http_code" =~ ^2 ]]; then
+            echo "SUCCESS: Repo '$ {{ inputs.repo_name }}' created."
+          else
+            echo "FAILURE: Repo creation failed."
+            exit 1
+          fi
