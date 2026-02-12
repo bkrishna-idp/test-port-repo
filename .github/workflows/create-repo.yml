@@ -14,16 +14,60 @@ on:
         required: true
         type: string
         default: "true"
+      jira_issue_key:
+        description: "Jira issue key to link the created repo"
+        required: true
+        type: string
       port_run_id:
         description: "Port action run id"
         required: true
         type: string
 
-
 jobs:
   create:
     runs-on: ubuntu-latest
     steps:
+      - name: Jira Approval gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          ISSUE="${{ inputs.jira_issue_key }}"
+          echo "Checking Jira approval for: $ISSUE"
+          
+          AUTH="$(printf "%s:%s" "${{ secrets.JIRA_EMAIL }}" "${{ secrets.JIRA_API_TOKEN }}" | base64) -w 0)"
+          
+          http_code=$(
+            curl -sS -o jira.json -w "%{http_code}" \
+           -X GET "${{ secrets.JIRA_BASE_URL }}/rest/api/3/issue/${ISSUE}" \
+           -H "Authorization: Basic $AUTH" \
+           -H "Accept: application/json"
+          )
+          
+          echo "Jira HTTP status: $http_code"
+          if [[ "$http_code" != "200" ]]; then
+            echo "ERROR: Failed Unable to fetch Jira issue issue ${ISSUE}"
+            cat jira.json || true
+            exit 1
+          fi
+          
+          JIRA_STATUS=$(jq -r '.fields.status.name // empty' jira.json)"
+            echo "Jira issue status: ${JIRA_STATUS}"
+          
+          case "$JIRA_STATUS" in
+            Approved|Accepted|Done)
+              echo "Jira issue ${ISSUE} is approved. Proceeding with repo creation."
+              ;;
+           Rejected|Declined)
+              echo "Jira issue ${ISSUE} is rejected. Aborting repo creation."
+              exit 1
+              ;;
+            *)
+              echo "Jira not approved yet (status=${JIRA_STATUS}.stopping."
+              exit 1
+              ;;
+            esac
+
       - name: Create repository
         shell: bash
         run: |
