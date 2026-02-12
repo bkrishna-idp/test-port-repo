@@ -1,21 +1,73 @@
 name: Delete GitHub Repo
 
+permissions:
+  actions: write
+  contents: read
+
 on:
   workflow_dispatch:
     inputs:
       repo_name:
         description: "Repository name to delete"
         required: true
-
-
+        type: string
+      port_run_id:
+        description: "Port action run id"
+        required: true
+        type: string
 
 jobs:
   delete:
     runs-on: ubuntu-latest
     steps:
       - name: Delete repository
+        shell: bash
         run: |
-          curl -i -X DELETE \
+          set -euo pipefail
+          
+          OWNER="bkrishna-idp"
+          REPO="${{ inputs.repo_name }}"
+
+          echo "Deleting repo: ${OWNER}/${REPO}"
+          
+          http_code=$(
+            curl -sS -o response.json -w "%{http_code}" \
+          -X DELETE https://api.github.com/repos/${OWNER}/${REPO} \
           -H "Authorization: Bearer ${{ secrets.PORT_SECRET_PAT }}" \
-          -H "Accept: application/vnd.github+json" \
-          https://api.github.com/repos/${{ github.actor }}/${{ inputs.repo_name }}
+          -H "Accept: application/vnd.github+json"
+          )
+          
+          echo "HTTP status: $http_code"
+          echo "Response:"
+          cat response.json || true
+          echo ""
+          
+          if [[ "$http_code" == "204" ]]; then
+              echo "SUCCESS: Repo '${OWNER}/${REPO}' deleted."
+          else
+              echo "FAILURE: Repo deletion failed."
+              exit 1
+          fi
+
+      - name: Notify port (always)
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+                
+          if [[ "${{ job.status }}" == "success" ]]; then
+             STATUS="SUCCESS"
+             LABEL="Repo deleted successfully"
+          else
+            STATUS="FAILURE"
+            LABEL="Repo deletion failed"
+          fi
+          
+          echo "Notifying Port runId=${{ inputs.port_run_id }} status: $STATUS"
+          
+          payload=$(printf '{"status":"%s", "statusLabel": "%s"}' "$STATUS" "$LABEL")
+          
+          curl -sS -X PATCH "https://api.port.io/v1/actions/runs/${{ inputs.port_run_id }}" \
+            -H "Authorization: Bearer ${{ secrets.PORT_SECRET_PAT }}" \
+            -H "Content-Type: application/json" \
+            -d "$payload"
