@@ -58,17 +58,20 @@ jobs:
         shell: bash
         run: |
           if [[ "${{ job.status }}" == "success" ]]; then
-            status="success"
+            STATUS="SUCCESS"
             LABEL="Repo created successfully"
           else
-            status="failure"
+            STATUS="FAILURE"
             LABEL="Repo creation failed"
           fi
+          
+          echo "Notifying port runId=${{ inputs.port_run_id }} with status=${STATUS}"
+          payload=$(printf '{
+            "status": "%s",
+            "statusLabel": "%s"
+          }' "$STATUS" "$LABEL")
           
           curl -sS -X PATCH "https://api.getport.io/v1/actions/runs/${{ inputs.port_run_id }}" \
             -H "Authorization: Bearer ${{ secrets.PORT_API_TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"status\": \"${STATUS}\",
-              \"statusLabel\": \"${LABEL}\"
-            }"
+            -d "$payload"
