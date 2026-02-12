@@ -77,6 +77,6 @@ jobs:
           payload=$(printf '{"status":"%s", "statusLabel": "%s"}' "$STATUS" "$LABEL")
           
           curl -sS -X PATCH "https://api.port.io/v1/actions/runs/${{ inputs.port_run_id }}" \
-            -H "Authorization: Bearer ${{ secrets.PORT_SECRET_PAT }}" \
+            -H "Authorization: Bearer ${{ secrets.PORT_API_TOKEN }}" \
             -H "Content-Type: application/json" \
             -d "$payload"
