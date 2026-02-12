@@ -38,7 +38,7 @@ jobs:
           cat response.json
           echo ""
           if [[ "$http_code" =~ ^2 ]]; then
-            echo "SUCCESS: Repo '$ {{ inputs.repo_name }}' created."
+            echo "SUCCESS: Repo '${{ inputs.repo_name }}' created."
           else
             echo "FAILURE: Repo creation failed."
             exit 1
