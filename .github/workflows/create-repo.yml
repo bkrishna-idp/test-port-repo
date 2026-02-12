@@ -8,7 +8,8 @@ on:
         type: string
       private:
         required: true
-        type: boolean
+        type: string
+        default: "true"
 
 
 jobs:
@@ -29,7 +30,7 @@ jobs:
           -H "Accept: application/vnd.github+json" \
           -d '{
             "name": "${{ inputs.repo_name }}",
-            "private": ${{inputs.private }}
+            "private": ${{inputs.private == 'true' }}
            }'
           )
           
