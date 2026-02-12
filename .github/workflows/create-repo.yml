@@ -66,7 +66,7 @@ jobs:
               echo "Jira not approved yet (status=${JIRA_STATUS}.stopping."
               exit 1
               ;;
-            esac
+          esac
 
       - name: Create repository
         shell: bash
