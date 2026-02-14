@@ -8,16 +8,23 @@ on:
   workflow_dispatch:
     inputs:
       repo_name:
+        description: "Repository name"
         required: true
         type: string
       private:
+        description: "create as a private repo?"
         required: true
-        type: string
+        type: boolean
         default: "true"
-      jira_issue_key:
-        description: "Jira issue key to link the created repo"
+      jira_summary:
+        description: "Jira ticket summary/title"
         required: true
         type: string
+      jira_description:
+        description: "Jira ticket description"
+        required: false
+        type: string
+        default: ""
       port_run_id:
         description: "Port action run id"
         required: true
@@ -27,46 +34,124 @@ jobs:
   create:
     runs-on: ubuntu-latest
     steps:
-      - name: Jira Approval gate
+      - name: Create Jira ticket
         shell: bash
         run: |
           set -euo pipefail
           
-          ISSUE="${{ inputs.jira_issue_key }}"
-          echo "Checking Jira approval for: $ISSUE"
+          JIRA_PROJECT_KEY="PORT"
+          JIRA_ISSUE_TYPE="Task"
           
-          AUTH="$(printf "%s:%s" "${{ secrets.JIRA_EMAIL }}" "${{ secrets.JIRA_API_TOKEN }}" | base64) -w 0)"
+          Summary="${{ inputs.jira_summary }}"
+          Description="${{ inputs.jira_description }}"
           
-          http_code=$(
-            curl -sS -o jira.json -w "%{http_code}" \
-           -X GET "${{ secrets.JIRA_BASE_URL }}/rest/api/3/issue/${ISSUE}" \
-           -H "Authorization: Basic $AUTH" \
-           -H "Accept: application/json"
+          echo "Creating Jira issue in project ${JIRA_PROJECT_KEY} type=$JIRA_ISSUE_TYPE"
+          echo "Summary: $Summary"
+          
+          payload=$(jq -n \
+              --arg projectKey "$JIRA_PROJECT_KEY" \
+              --arg sum "$SUMMARY" \
+              --arg it  "$JIRA_ISSUE_TYPE" \
+              --arg desc "$Description" \
+                '{
+                   fields: {
+                       project: { key: $pk },
+                       summary: $sum,
+                       issuetype: { name: $it },
+                       description: {
+                            type: "doc",
+                            version: 1,
+                            content: [
+                              {
+                                type: "paragraph",
+                                content: [
+                                { type: "text", text: $desc }
+                                 ]
+                              }
+                            ]
+                       }
+                   }
+                }'
           )
           
-          echo "Jira HTTP status: $http_code"
-          if [[ "$http_code" != "200" ]]; then
-            echo "ERROR: Failed Unable to fetch Jira issue issue ${ISSUE}"
-            cat jira.json || true
+          http_code=$(
+            curl -sS -o jira_resp.json -w "%{http_code}" \
+             -u "${{ secrets.JIRA_EMAIL }}:${{ secrets.JIRA_API_TOKEN }}" \
+             -H "Accept: application/json" \
+             -H "Content-Type: application/json" \
+             -X POST "${{ secrets.JIRA_BASE_URL }}/rest/api/3/issue" \
+            --data "$payload"
+           
+          )
+          
+          echo "Jira create HTTP status: $http_code"
+          cat jira_resp.json || true
+          echo ""
+          
+          if [[ "$http_code" != "201" ]]; then
+            echo "FAILURE: Jira ticket creation failed."
             exit 1
           fi
           
-          JIRA_STATUS=$(jq -r '.fields.status.name // empty' jira.json)"
-            echo "Jira issue status: ${JIRA_STATUS}"
+          JIRA_KEY=$(jq -r '.key' jira_resp.json)"
+          if [[ -z "$JIRA_KEY" || $JIRA_KEY == "null" ]]; then
+            echo "FAILURE: Jira key not found in response."
+            exit 1
+          fi
           
-          case "$JIRA_STATUS" in
-            Approved|Accepted|Done)
-              echo "Jira issue ${ISSUE} is approved. Proceeding with repo creation."
-              ;;
-           Rejected|Declined)
-              echo "Jira issue ${ISSUE} is rejected. Aborting repo creation."
-              exit 1
-              ;;
-            *)
-              echo "Jira not approved yet (status=${JIRA_STATUS}.stopping."
-              exit 1
-              ;;
-          esac
+          echo "Jira issue created: $JIRA_KEY"
+          echo "JIRA_KEY=$JIRA_KEY" >> $GITHUB_ENV
+          echo "JIRA_URL=${{ secrets.JIRA_BASE_URL }}/browse/${JIRA_KEY}" >> $GITHUB_ENV
+
+      - name: wait for jira status = "To Do" (or fail if "Rejected")
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          ISSUE="$JIRA_KEY"
+          echo "Jira ticket: $ISSUE"
+          echo "jira URL: $JIRA_URL"
+          echo "waiting for Jira status change.."
+          
+          APPROVED_STATUS="To Do"
+          REJECTED_STATUS="Rejected"
+          
+          MAX_ATTEMPTS=240
+          SLEEP_SECONDS=15
+          
+          for ((i=1; i<=MAX_ATTEMPTS; i++)); do
+            http_code=$(
+              curl -sS -o jira.json -w "%{http_code}" \
+                   -u "${{ secrets.JIRA_EMAIL }}:${{ secrets.JIRA_API_TOKEN }}" \
+                   -H "Accept: application/json" \
+                   "${{ secrets.JIRA_BASE_URL }}/rest/api/3/issue/${ISSUE}"
+            )
+          
+            if [[ "$http_code" != "200" ]]; then
+                  echo "Attempt $i: Jira fetch failed  (HTTP $http_code)"
+                  cat jira.json || true
+                  sleep $SLEEP_SECONDS
+                  continue
+            fi
+          
+            STATUS=$(jq -r '.fields.status.name // empty' jira.json)"
+            echo "Attempt $i: status: '$STATUS'"
+          
+            if [[ "$STATUS" == "$APPROVED_STATUS" ]]; then
+                  echo "Approved (status moved to '$APPROVED_STATUS'). Proceeding with repo creation."
+                  exit 0
+            fi
+          
+            if [[ "$STATUS" == "$REJECTED_STATUS" ]]; then
+                  echo "Rejected (status ='$REJECTED_STATUS'). Repo will not be created."
+                  exit 1
+            fi
+           
+            sleep $SLEEP_SECONDS
+          done
+
+          echo "Timed out waiting for Jira approval."
+          exit 1
 
       - name: Create repository
         shell: bash
@@ -74,22 +159,23 @@ jobs:
           set -euo pipefail
           
           echo "Creating repo: '${{ inputs.repo_name }}' (private=${{ inputs.private }})"
+          echo "Approved by Jira: $JIRA_KEY"
           
           http_code=$(
             curl -sS -o response.json -w "%{http_code}" \
-          -X POST https://api.github.com/user/repos \
-          -H "Authorization: Bearer ${{ secrets.PORT_SECRET_PAT }}" \
-          -H "Accept: application/vnd.github+json" \
-          -d '{
-            "name": "${{ inputs.repo_name }}",
-            "private": ${{inputs.private == 'true' }}
-           }'
+              -X POST https://api.github.com/user/repos \
+              -H "Authorization: Bearer ${{ secrets.PORT_SECRET_PAT }}" \
+              -H "Accept: application/vnd.github+json" \
+              -d '{
+                "name": "${{ inputs.repo_name }}",
+                "private": ${{inputs.private == 'true' }}
+               }'
           )
           
           echo "HTTP status: $http_code"
-          echo "Response:"
-          cat response.json
+          echo "Response.json || true
           echo ""
+          
           if [[ "$http_code" =~ ^2 ]]; then
             echo "SUCCESS: Repo '${{ inputs.repo_name }}' created."
           else
@@ -101,19 +187,17 @@ jobs:
         if: always()
         shell: bash
         run: |
+          set -euo pipefail
+          
           if [[ "${{ job.status }}" == "success" ]]; then
             STATUS="SUCCESS"
-            LABEL="Repo created successfully"
+            LABEL="Repo created. Jira: $JIRA_KEY ($JIRA_URL)"
           else
             STATUS="FAILURE"
-            LABEL="Repo creation failed"
+            LABEL="Repo not created (Jira rejected or not Approved). Jira: $JIRA_KEY ($JIRA_URL)"
           fi
           
-          echo "Notifying port runId=${{ inputs.port_run_id }} with status=${STATUS}"
-          payload=$(printf '{
-            "status": "%s",
-            "statusLabel": "%s"
-          }' "$STATUS" "$LABEL")
+          payload=$(jq -n --arg s "$STATUS" --arg l "$LABEL" '{status:$s, statusLabel:$1}')
           
           curl -sS -X PATCH "https://api.getport.io/v1/actions/runs/${{ inputs.port_run_id }}" \
             -H "Authorization: Bearer ${{ secrets.PORT_API_TOKEN }}" \
