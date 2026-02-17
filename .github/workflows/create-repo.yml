@@ -14,7 +14,7 @@ on:
       private:
         description: "create as a private repo?"
         required: true
-        type: boolean
+        type: string
         default: "true"
       jira_summary:
         description: "Jira ticket summary/title"
@@ -169,15 +169,25 @@ jobs:
           echo "Creating repo: '${{ inputs.repo_name }}' (private=${{ inputs.private }})"
           echo "Approved by Jira: $JIRA_KEY"
           
+          if [[ "${{ inputs.private }}" == "true" ]]; then
+            PRIVATE_VALUE=true
+          else
+            PRIVATE_VALUE=false
+          fi
+          
+          payload=$(jq -n \
+            --arg name "${{ inputs.repo_name }}" \
+            --argjson private $PRIVATE_VALUE \
+            '{name: $name, private: $priv}'
+          )
+            
+          
           http_code=$(
             curl -sS -o response.json -w "%{http_code}" \
-              -X POST https://api.github.com/user/repos \
+              -X POST "https://api.github.com/user/repos" \
               -H "Authorization: Bearer ${{ secrets.PORT_SECRET_PAT }}" \
               -H "Accept: application/vnd.github+json" \
-              -d '{
-                "name": "${{ inputs.repo_name }}",
-                "private": ${{inputs.private == 'true' }}
-               }'
+              -d "$payload"
           )
           
           echo "HTTP status: $http_code"
