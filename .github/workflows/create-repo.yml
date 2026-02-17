@@ -132,7 +132,7 @@ jobs:
               curl -sS -o jira.json -w "%{http_code}" \
                    -u "${{ secrets.JIRA_EMAIL }}:${{ secrets.JIRA_API_TOKEN }}" \
                    -H "Accept: application/json" \
-                   "${{ secrets.JIRA_BASE_URL }}/rest/api/3/issue/${ISSUE}"
+                   "${{ secrets.JIRA_BASE_URL }}/rest/api/3/issue/${ISSUE}?fields=status"
             )
           
             if [[ "$http_code" != "200" ]]; then
