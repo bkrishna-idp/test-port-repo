@@ -204,23 +204,42 @@ jobs:
             exit 1
           fi
 
-      - name: Notify port (always)
+      - name: Notify Port (always)
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          
+
+          echo "DEBUG: job.status='${{ job.status }}' JIRA_KEY='${JIRA_KEY:-unset}' JIRA_URL='${JIRA_URL:-unset}'"
+
           if [[ "${{ job.status }}" == "success" ]]; then
             STATUS="SUCCESS"
-            LABEL="Repo created. Jira: $JIRA_KEY ($JIRA_URL)"
+            LABEL="Repo created. Jira: ${JIRA_KEY:-unknown} (${JIRA_URL:-unknown})"
           else
             STATUS="FAILURE"
-            LABEL="Repo not created (Jira rejected or not Approved). Jira: $JIRA_KEY ($JIRA_URL)"
+            LABEL="Repo not created (Jira rejected or not Approved). Jira: ${JIRA_KEY:-unknown} (${JIRA_URL:-unknown})"
           fi
-          
-          payload=$(jq -n --arg s "$STATUS" --arg l "$LABEL" '{status:$s, statusLabel:$l}')
-          
-          curl -sS -X PATCH "https://api.getport.io/v1/actions/runs/${{ inputs.port_run_id }}" \
-            -H "Authorization: Bearer ${{ secrets.PORT_API_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            -d "$payload"
+
+          # Port expects { status, statusLabel } on v2 schema
+          payload=$(jq -n --arg s "$STATUS" --arg l "$LABEL" '{status: $s, statusLabel: $l}')
+
+          echo "About to PATCH Port with payload:"
+          echo "$payload" | jq .
+
+          http_code=$(
+            curl -sS -o port_response.json -w "%{http_code}" \
+              -X PATCH "https://api.getport.io/v1/actions/runs/${{ inputs.port_run_id }}?version=v2" \
+              -H "Authorization: Bearer ${{ secrets.PORT_API_TOKEN }}" \
+              -H "Content-Type: application/json" \
+              --data "$payload"
+          )
+
+          echo "Port HTTP status: $http_code"
+          echo "Port response body:"
+          cat port_response.json || true
+
+          # Optional: fail if Port didn't accept the update (helps surface 422s)
+          if ! [[ "$http_code" =~ ^2[0-9]{2}$ ]]; then
+            echo "Port update failed."
+            exit 1
+          fi
