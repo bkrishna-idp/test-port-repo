@@ -34,6 +34,14 @@ jobs:
   create:
     runs-on: ubuntu-latest
     steps:
+      - name: Debug Jira base URL
+        shell: bash
+        run: |
+          set -e
+          echo "Testing Jira base URL..."
+          echo "Value: '${{ secrets.JIRA_BASE_URL }}'"
+          curl -v "${{ secrets.JIRA_BASE_URL }}"
+
       - name: Create Jira ticket
         shell: bash
         run: |
