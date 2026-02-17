@@ -58,12 +58,12 @@ jobs:
           
           payload=$(jq -n \
               --arg projectKey "$JIRA_PROJECT_KEY" \
-              --arg sum "$SUMMARY" \
+              --arg sum "$Summary" \
               --arg it  "$JIRA_ISSUE_TYPE" \
               --arg desc "$Description" \
                 '{
                    fields: {
-                       project: { key: $pk },
+                       project: { key: $projectKey },
                        summary: $sum,
                        issuetype: { name: $it },
                        description: {
@@ -101,7 +101,7 @@ jobs:
             exit 1
           fi
           
-          JIRA_KEY=$(jq -r '.key' jira_resp.json)"
+          JIRA_KEY=$(jq -r '.key' jira_resp.json)
           if [[ -z "$JIRA_KEY" || $JIRA_KEY == "null" ]]; then
             echo "FAILURE: Jira key not found in response."
             exit 1
