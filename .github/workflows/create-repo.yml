@@ -178,7 +178,7 @@ jobs:
           payload=$(jq -n \
             --arg name "${{ inputs.repo_name }}" \
             --argjson private $PRIVATE_VALUE \
-            '{name: $name, private: $priv}'
+            '{name: $name, private: $private}'
           )
             
           
@@ -218,7 +218,7 @@ jobs:
             LABEL="Repo not created (Jira rejected or not Approved). Jira: $JIRA_KEY ($JIRA_URL)"
           fi
           
-          payload=$(jq -n --arg s "$STATUS" --arg l "$LABEL" '{status:$s, statusLabel:$1}')
+          payload=$(jq -n --arg s "$STATUS" --arg l "$LABEL" '{status:$s, statusLabel:$l}')
           
           curl -sS -X PATCH "https://api.getport.io/v1/actions/runs/${{ inputs.port_run_id }}" \
             -H "Authorization: Bearer ${{ secrets.PORT_API_TOKEN }}" \
