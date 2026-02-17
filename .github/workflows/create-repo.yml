@@ -15,7 +15,7 @@ on:
         description: "create as a private repo?"
         required: true
         type: boolean
-        default: "true"
+        default: true
       jira_summary:
         description: "Jira ticket summary/title"
         required: true
