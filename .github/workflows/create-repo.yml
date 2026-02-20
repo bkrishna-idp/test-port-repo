@@ -120,8 +120,15 @@ jobs:
           echo "JIRA_KEY=$JIRA_KEY" >> $GITHUB_ENV
           echo "JIRA_URL=${{ secrets.JIRA_BASE_URL }}/browse/${JIRA_KEY}" >> $GITHUB_ENV
 
-      - name: wait for jira status = "To Do" (or fail if "Rejected")
+      - name: wait for jira status = "In Progress" (or fail if "Rejected")
         shell: bash
+        env:
+            JIRA_KEY: ${{ env.JIRA_KEY }}
+            JIRA_URL: ${{ env.JIRA_URL }}
+
+            JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+            JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+            JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
         run: |
           set -euo pipefail
           
@@ -130,19 +137,19 @@ jobs:
           echo "jira URL: $JIRA_URL"
           echo "waiting for Jira status change.."
           
-          APPROVED_STATUS="To Do"
+          APPROVED_STATUS="In Progress"
           REJECTED_STATUS="Rejected"
           
           MAX_ATTEMPTS=240
           SLEEP_SECONDS=15
           
           for ((i=1; i<=MAX_ATTEMPTS; i++)); do
-            http_code=$(
-              curl -sS -o jira.json -w "%{http_code}" \
-                   -u "${{ secrets.JIRA_EMAIL }}:${{ secrets.JIRA_API_TOKEN }}" \
+            echo "Attempt $i: fetching Jira status..."
+          
+          http_code=$(curl -sS -o jira.json -w "%{http_code}" \
+                   -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
                    -H "Accept: application/json" \
-                   "${{ secrets.JIRA_BASE_URL }}/rest/api/3/issue/${ISSUE}?fields=status"
-            )
+                   "${JIRA_BASE_URL}/rest/api/3/issue/${ISSUE}?fields=status")
           
             if [[ "$http_code" != "200" ]]; then
                   echo "Attempt $i: Jira fetch failed  (HTTP $http_code)"
@@ -167,7 +174,7 @@ jobs:
             sleep $SLEEP_SECONDS
           done
 
-          echo "Timed out waiting for Jira approval."
+          echo "Timed out waiting for Jira to move to '$APPROVED_STATUS'."
           exit 1
 
       - name: Create repository
