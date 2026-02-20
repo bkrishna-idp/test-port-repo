@@ -132,9 +132,16 @@ jobs:
         run: |
           set -euo pipefail
           
-          
+          ISSUE="${JIRA_KEY:-}"
+          if [ -z "$ISSUE" ]; then
+            echo "ERROR: JIRA_KEY is not set; cannot wait on jira status."
+            env | sort | grep -E 'JIRA_' || true
+            exit 1
+          fi
+            
+            
           echo "Jira ticket: $ISSUE"
-          echo "jira URL: $JIRA_URL"
+          echo "jira URL: ${JIRA_URL:-"(unknown)"}"
           echo "waiting for Jira status change.."
           
           APPROVED_STATUS="In Progress"
