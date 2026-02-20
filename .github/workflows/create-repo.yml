@@ -167,7 +167,7 @@ jobs:
                   continue
             fi
           
-            STATUS=$(jq -r '.fields.status.name // empty' jira.json)"
+            STATUS=$(jq -r '.fields.status.name // empty' jira.json)
             echo "Attempt $i: status: '$STATUS'"
           
             if  [ "$STATUS" == "$APPROVED_STATUS" ]; then
@@ -186,7 +186,6 @@ jobs:
 
           echo "Timed out waiting for Jira approval."
           exit 1
-
       - name: Create repository
         shell: bash
         run: |
@@ -220,7 +219,7 @@ jobs:
           )
           
           echo "HTTP status: $http_code"
-          echo "Response.json || true
+          cat response.json || true
           echo ""
           
           if [[ "$http_code" =~ ^2 ]]; then
