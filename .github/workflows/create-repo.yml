@@ -56,6 +56,12 @@ jobs:
           echo "Creating Jira issue in project ${JIRA_PROJECT_KEY} type=$JIRA_ISSUE_TYPE"
           echo "Summary: $Summary"
           
+          echo "JIRA_PROJECT_KEY is: 'JIRA_PROJECT_KEY'"
+          echo "Issue type is: '$JIRA_ISSUE_TYPE'"
+          echo "jira summary is: '$Summary'"
+          echo "jira description is: '$Description'"
+          echo "---"
+          
           payload=$(jq -n \
               --arg projectKey "$JIRA_PROJECT_KEY" \
               --arg sum "$Summary" \
@@ -81,6 +87,9 @@ jobs:
                    }
                 }'
           )
+          
+          echo "Final Jira JSON payload:"
+          echo "$payload" | jq .
           
           http_code=$(
             curl -sS -o jira_resp.json -w "%{http_code}" \
