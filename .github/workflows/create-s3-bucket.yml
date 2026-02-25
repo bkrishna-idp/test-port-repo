@@ -1,0 +1,62 @@
+name: Create S3 Bucket
+
+on:
+  workflow_dispatch:
+    inputs:
+      bucket_name:
+        description: "S3 bucket name"
+        required: true
+        type: string
+      region:
+        description: "AWS region for the S3 bucket"
+        required: true
+        default: "us-east-1"
+        type: string
+      port_run_id:
+        description: "Port action run id"
+        required: true
+        type: string
+
+jobs:
+    create_bucket:
+      runs-on: ubuntu-latest
+
+      permissions:
+        id-token: write
+        contents: read
+
+steps:
+        - name: Checkout repo
+          uses: actions/checkout@v4
+
+        - name: Configure AWS credentials
+          uses: aws-actions/configure-aws-credentials@v4
+          with:
+            aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+            aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            aws-region: ${{ github.event.inputs.region || secret.AWS_REGION }}
+
+        - name: Show requested bucket
+          run: |
+            echo "Creating bucket: ${{ github.event.inputs.bucket_name }}"
+            echo "Region: ${{ github.event.inputs.region }}"
+            echo "Port run ID: ${{ github.event.inputs.port_run_id }}"
+
+        - name: Create S3 bucket
+          id: create_bucket
+          run: |
+            BUCKET="${{ github.event.inputs.bucket_name }}"
+            REGION="${{ github.event.inputs.region }}"
+            
+            If [ "$REGION" == "us-east-1" ]; then
+              aws s3api create-bucket \
+                --bucket "$BUCKET" \
+                --region "$REGION"
+            else
+              aws s3api create-bucket \
+                --bucket "$BUCKET" \
+                --region "$REGION" \
+                --create-bucket-configuration LocationConstraint="$REGION"
+            fi
+
+
