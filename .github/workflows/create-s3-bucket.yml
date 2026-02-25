@@ -51,7 +51,7 @@ jobs:
             echo "Bucket: $BUCKET"
             echo "Region: $REGION"
             
-            If [ "$REGION" = "us-east-1" ]; then
+            if [ "$REGION" = "us-east-1" ]; then
               echo "Creating bucket in us-east-1 (no LocationConstraint needed).."
               aws s3api create-bucket \
                 --bucket "$BUCKET" \
