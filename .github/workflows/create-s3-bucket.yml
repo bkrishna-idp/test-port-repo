@@ -48,11 +48,16 @@ jobs:
             BUCKET="${{ github.event.inputs.bucket_name }}"
             REGION="${{ github.event.inputs.region }}"
             
-            If [ "$REGION" == "us-east-1" ]; then
+            echo "Bucket: $BUCKET"
+            echo "Region: $REGION"
+            
+            If [ "$REGION" = "us-east-1" ]; then
+              echo "Creating bucket in us-east-1 (no LocationConstraint needed).."
               aws s3api create-bucket \
                 --bucket "$BUCKET" \
                 --region "$REGION"
             else
+              echo "Creating bucket in non us-east-1 region..."
               aws s3api create-bucket \
                 --bucket "$BUCKET" \
                 --region "$REGION" \
